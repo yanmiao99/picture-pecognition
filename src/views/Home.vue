@@ -65,16 +65,22 @@ export default {
         //   similarity: '123'
         // },
       ],
-      listCount: 12412, // 列表总数
+      listCount: 0, // 列表总数
     }
   },
 
   created() {
     // this.fitList = new Array(20).fill(this.fitList[0])
+    this.getCount()
   },
 
-
   methods: {
+
+    async getCount() {
+      let res = await this.$request.post('img/count')
+      console.log(res);
+    },
+
     handleImgSuccess() {
     },
     beforeImgUpload() {
