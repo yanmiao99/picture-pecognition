@@ -10,10 +10,13 @@
         <div class="avatar-uploader">
           <p class="avatar-uploader-title">上传需要识别的图片</p>
           <el-upload
-              action="https://jsonplaceholder.typicode.com/posts/"
+              action="#"
+              v-loading="avatarLoading"
+              element-loading-text="图片上传中"
+              element-loading-spinner="el-icon-loading"
               :show-file-list="false"
-              :on-success="handleImgSuccess"
-              :before-upload="beforeImgUpload">
+              :http-request="handleAvatarUpload"
+          >
             <img v-if="imageUrl" :src="imageUrl" class="avatar">
             <i v-else class="el-icon-plus avatar-uploader-icon"></i>
           </el-upload>
@@ -21,31 +24,57 @@
         <!-- 图片上传入库 -->
         <el-upload
             class="batch-upload"
-            action="https://jsonplaceholder.typicode.com/posts/"
+            action="#"
             multiple
+            :on-change="handleBatchChange"
+            :auto-upload="false"
             :file-list="batchFileList">
-          <el-button plain size="small" type="primary">批量上传入库</el-button>
+          <el-button disabled plain size="small" type="primary" @click="handleBatchUpload">批量上传入库</el-button>
         </el-upload>
         <!-- 清除 -->
-        <el-button class="clear-btn" plain type="danger" size="small">清除</el-button>
+        <el-popconfirm title="确定删除吗？">
+          <el-button
+              slot="reference"
+              class="clear-btn"
+              plain
+              type="danger"
+              size="small"
+              @confirm="handleClear">
+            清除
+          </el-button>
+        </el-popconfirm>
+        <div class="img-list-count">
+          图片库总数 : {{ listCount }}
+        </div>
       </div>
-      <div class="right-box">
+      <div
+          class="right-box"
+          v-loading="imgLoading"
+          element-loading-text="图片识别中"
+          element-loading-spinner="el-icon-loading"
+      >
         <div class="image-list" v-if="fitList.length > 0">
           <div class="image-item"
                v-for="(fit,index) in fitList"
                :key="index">
             <el-image
-                style="width: 100%; height: 100%"
+                lazy
+                :preview-src-list="srcList"
+                class="image-img"
                 :src="fit.url"
                 fit="contain"/>
-            <span class="image-floating-window">相识度 : {{ fit.similarity }}%</span>
+            <span class="image-floating-window">
+              相识度 :
+              {{ fit.similarity.toFixed(2) }}%
+            </span>
           </div>
         </div>
         <el-empty class="no-data" v-else description="请先上传需要识别的图片"></el-empty>
-        <div class="count-box">总数 : {{ listCount }}</div>
+        <div class="count-box">
+          识别图片总数 : {{ fitList.length }}
+        </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -56,35 +85,130 @@ export default {
   data() {
     return {
       batchFileList: [], // 批量上传
-      imageUrl: '', // 上传的图片
+      imageUrl: '', // 上传单张的图片
+      avatarLoading: null,  // 上传单张图片 loading
       // 图片列表
-      fitList: [
-        // {
-        //   id: 1,
-        //   url: 'https://fuss10.elemecdn.com/e/5d/4a731a90594a4af544c0c25941171jpeg.jpeg',
-        //   similarity: '123'
-        // },
-      ],
+      fitList: [],
       listCount: 0, // 列表总数
+      imgLoading: null,  // 列表 loading
+      srcList: [] // 图片放大预览
     }
   },
 
   created() {
-    // this.fitList = new Array(20).fill(this.fitList[0])
     this.getCount()
   },
 
   methods: {
+    // 识别图片上传
+    async handleAvatarUpload(param) {
+      this.avatarLoading = true
+      const formData = new FormData()
+      formData.append('image', param.file)
+      let res = await this.$request.post('img/upload',
+          formData,
+          {headers: {'Content-Type': 'multipart/form-data'}}
+      )
+      if (res) {
+        // 上传成功 , 更改上传的图片的回显
+        this.imageUrl = URL.createObjectURL(param.file);
+        this.avatarLoading = false
+        this.$message({type: 'success', message: '图片上传成功'})
 
+        // 搜索图片
+        await this.getSearchImg(formData)
+      }
+    },
+
+    // 搜索所上传的图片
+    async getSearchImg(formData) {
+      let res = await this.$request.post('img/search',
+          formData,
+          {headers: {'Content-Type': 'multipart/form-data'}}
+      )
+      if (res.length > 0) {
+        // 处理数据 (二维数组转一维)
+        let tempArr = []
+        res.forEach(item => {
+          tempArr.push({
+            url: item[0],
+            similarity: item[1]
+          })
+        })
+        this.$message({type: 'success', message: '图片搜索成功'})
+        await this.getImgList(tempArr)
+      }
+    },
+
+    // 获取图片列表数据
+    async getImgList(arr) {
+      this.imgLoading = true
+      this.fitList = []
+      this.srcList = []
+
+      for (const item of arr) {
+        let res = await this.$request.get('data', {
+          image_path: item.url
+        }, {
+          responseType: 'arraybuffer', // 用于处理流转图片
+        })
+
+        let binary = "";
+        let bytes = new Uint8Array(res);
+        let len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        let imgUrl = "data:img/png;base64," + window.btoa(binary);
+        this.fitList.push({
+          url: imgUrl,
+          similarity: item.similarity
+        })
+
+        // 排序
+        this.fitList = this.fitList.sort((a, b) => a.similarity - b.similarity)
+        this.srcList.push(imgUrl)
+        this.imgLoading = false
+      }
+
+      await this.getCount()
+      this.$message({type: 'success', message: '图片识别完毕'})
+    },
+
+    // 获取总数
     async getCount() {
-      let res = await this.$request.post('img/count')
-      console.log(res);
+      this.listCount = await this.$request.post('img/count') || 0
     },
 
-    handleImgSuccess() {
+    // 清除按钮
+    async handleClear() {
+      let res = await this.$request.post('img/drop')
+      console.log(res);
+      await this.getCount()
+      // todo 请求数据
     },
-    beforeImgUpload() {
+
+    // 获取批量上传的所有数据 (暂未开发)
+    handleBatchChange(file, fileList) {
+      this.batchFileList = fileList;
+      console.log(fileList)
     },
+
+    // 批量上传图片 (暂未开发)
+    async handleBatchUpload() {
+
+      // let form = new FormData();
+      // form.append("name", this.name);
+      // this.batchFileList.forEach(item => {
+      //   form.append("files", item.raw);
+      // })
+      // let res = await this.$request.post('/img/load', {
+      //   Table: '123',
+      //   File: this.batchFileList[0].raw
+      // })
+      // console.log(res);
+    },
+
   }
 }
 </script>
@@ -93,6 +217,7 @@ export default {
 body, html {
   background: #f5f5f5;
 }
+
 </style>
 
 <style lang="scss" scoped>
@@ -173,6 +298,13 @@ body, html {
       .clear-btn {
         width: 180px;
       }
+
+      .img-list-count {
+        text-align: center;
+        margin-top: 20px;
+        color: #333333;
+        font-size: 16px;
+      }
     }
 
     .right-box {
@@ -190,6 +322,7 @@ body, html {
 
         .image-item {
           max-width: 300px;
+          width: 170px;
           height: 150px;
           position: relative;
           cursor: pointer;
@@ -200,6 +333,15 @@ body, html {
             .image-floating-window {
               display: block;
             }
+          }
+
+          .image-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 5px;
+            border: 1px dashed #ccc;
+            padding: 10px;
+            box-sizing: border-box;
           }
 
           .image-floating-window {
