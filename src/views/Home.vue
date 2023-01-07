@@ -1,3 +1,7 @@
+<!--
+后端 : https://github.com/milvus-io/bootcamp/tree/master/solutions/image/reverse_image_search/quick_deploy
+-->
+
 <template>
   <div class="home">
     <div class="header-box">
@@ -21,16 +25,26 @@
             <i v-else class="el-icon-plus avatar-uploader-icon"></i>
           </el-upload>
         </div>
-        <!-- 图片上传入库 -->
-        <el-upload
-            class="batch-upload"
-            action="#"
-            multiple
-            :on-change="handleBatchChange"
-            :auto-upload="false"
-            :file-list="batchFileList">
-          <el-button disabled plain size="small" type="primary" @click="handleBatchUpload">批量上传入库</el-button>
-        </el-upload>
+
+        <div class="batch-box">
+          <el-input
+              v-model="batchInput"
+              placeholder="输入路径"
+              clearable
+              size="small"
+              prefix-icon="el-icon-paperclip"
+          />
+          <el-button
+              :disabled="batchInput.length === 0"
+              plain
+              size="small"
+              type="primary"
+              @click="handleBatchBtn">
+            入库
+          </el-button>
+        </div>
+
+
         <!-- 清除 -->
         <el-popconfirm title="确定删除吗？">
           <el-button
@@ -64,8 +78,7 @@
                 :src="fit.url"
                 fit="contain"/>
             <span class="image-floating-window">
-              相识度 :
-              {{ fit.similarity.toFixed(2) }}%
+              {{ fit.similarity.toFixed(2) }}
             </span>
           </div>
         </div>
@@ -84,14 +97,14 @@ export default {
   components: {},
   data() {
     return {
-      batchFileList: [], // 批量上传
       imageUrl: '', // 上传单张的图片
       avatarLoading: null,  // 上传单张图片 loading
       // 图片列表
       fitList: [],
       listCount: 0, // 列表总数
       imgLoading: null,  // 列表 loading
-      srcList: [] // 图片放大预览
+      srcList: [], // 图片放大预览
+      batchInput:'' // 路径
     }
   },
 
@@ -188,25 +201,12 @@ export default {
       // todo 请求数据
     },
 
-    // 获取批量上传的所有数据 (暂未开发)
-    handleBatchChange(file, fileList) {
-      this.batchFileList = fileList;
-      console.log(fileList)
-    },
-
-    // 批量上传图片 (暂未开发)
-    async handleBatchUpload() {
-
-      // let form = new FormData();
-      // form.append("name", this.name);
-      // this.batchFileList.forEach(item => {
-      //   form.append("files", item.raw);
-      // })
-      // let res = await this.$request.post('/img/load', {
-      //   Table: '123',
-      //   File: this.batchFileList[0].raw
-      // })
-      // console.log(res);
+    async handleBatchBtn() {
+      let res = await this.$request.post('/img/load', {
+        Table: 'string',
+        File: this.batchInput
+      })
+      console.log(res);
     },
 
   }
@@ -288,10 +288,17 @@ body, html {
         }
       }
 
-      .batch-upload {
-        .el-button {
-          width: 180px;
+      .batch-box {
+        width: 180px;
+
+        .el-input {
+          width: 100%;
           margin: 20px 0;
+        }
+
+        .el-button {
+          width: 100%;
+          margin-bottom: 20px;
         }
       }
 
