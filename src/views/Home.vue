@@ -19,6 +19,7 @@
               element-loading-text="图片上传中"
               element-loading-spinner="el-icon-loading"
               :show-file-list="false"
+              :before-upload="beforeAvatarUpload"
               :http-request="handleAvatarUpload"
           >
             <img v-if="imageUrl" :src="imageUrl" class="avatar">
@@ -104,7 +105,7 @@ export default {
       listCount: 0, // 列表总数
       imgLoading: null,  // 列表 loading
       srcList: [], // 图片放大预览
-      batchInput:'' // 路径
+      batchInput: '' // 路径
     }
   },
 
@@ -113,6 +114,19 @@ export default {
   },
 
   methods: {
+    // 判断上传的类型
+    beforeAvatarUpload(file) {
+      const isLt2M = file.size / 1024 / 1024 < 2;
+
+      let reg = new RegExp("[\\u4E00-\\u9FFF]+", "g")
+      let IsChineseName = reg.test(file.name)
+
+      if (!isLt2M) this.$message.error('上传图片大小不能超过 2MB!');
+      if (IsChineseName) this.$message.error('上传图片不能有中文名称');
+
+      return isLt2M && !IsChineseName;
+    },
+
     // 识别图片上传
     async handleAvatarUpload(param) {
       this.avatarLoading = true
